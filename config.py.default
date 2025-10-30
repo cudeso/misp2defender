@@ -1,0 +1,51 @@
+graph_auth = {
+  'tenant': '',
+  'client_id': '',
+  'client_secret': '',
+}
+
+max_indicators_per_query=450
+quota_requests=25
+targetScope = 'https://api.securitycenter.windows.com/.default'
+
+
+misp_domain = ''
+misp_key = ''
+misp_verifycert = False
+
+misp_event_filters = {
+    'published': True,
+    'tags': ["workflow:state=\"complete\""],
+    'enforceWarninglist': True,
+    'publish_timestamp': '2d',
+}
+misp_event_limit_per_page = 100
+
+verbose_log = True
+log_file = "misp2defender.log"
+dry_run = False
+misp_flatten_attributes = True
+
+
+write_parsed_eventid = True
+write_parsed_indicators = True
+
+days_to_expire_ignore_misp_last_seen = True
+days_to_expire = 50
+days_to_expire_start = "valid_from" #"valid_from" | "current_date"
+days_to_expire_mapping = {
+                    "IpAddress": 1,
+                    "FileMd5": 1,
+                    "FileSha1": 1,
+                    "FileSha256": 1,
+                    "Url": 1,
+                    "DomainName": 1,
+                }
+
+defender_application = "MISP"
+#defender_severity = "Medium"    # Informational, Low, Medium, and High.
+defender_recommended_actions = "Block" # string
+defender_generate_alert = True   
+defender_action  = "Alert"   # Warn, Block, Audit, Alert, AlertAndBlock, BlockAndRemediate, and Allowed.
+
+ms_check_if_exist_in_sentinel = True
