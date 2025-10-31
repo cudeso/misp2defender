@@ -27,7 +27,7 @@ def push_indicators_post(headers, push_indicator_sentinel):
 def already_in_sentinel(misp_indicator):
     return False
 
-def get_misp_events_upload_indicators():
+def get_misp_events_upload_indicators(existing_indicators):
     misp = PyMISP(config.misp_domain, config.misp_key, config.misp_verifycert, False)
     
     logger.debug("Query MISP for events")
@@ -40,23 +40,9 @@ def get_misp_events_upload_indicators():
         with open(PARSED_INDICATORS_FILE_NAME, "w") as fp:
             fp.write("")
 
-    data = {
-        'client_id': config.graph_auth["client_id"],
-        'grant_type': 'client_credentials',
-        'client_secret': config.graph_auth["client_secret"],
-        'scope': config.targetScope,
-        }
-    try:
-        access_token = requests.post("https://login.microsoftonline.com/{}/oauth2/v2.0/token".format(config.graph_auth["tenant"]), data=data)
-        if "access_token" in access_token.json():
-            headers = {"Authorization": "Bearer {}".format(access_token.json()["access_token"]), "Content-Type": "application/json"}
-            logger.info("Received access token for Microsoft Defender API")
-        else:
-            logger.error("No token received {}".format(access_token.text))
-            sys.exit()
-    except:
-        logger.error("No access token received")
-        sys.exit()
+    headers = get_headers_with_access_token()
+    if not headers:
+        return False
 
     while remaining_misp_pages:
         result_set = []
@@ -78,7 +64,13 @@ def get_misp_events_upload_indicators():
                         logger.info("Processing event {} {}".format(event["Event"]["id"], event["Event"]["info"]))
 
                     for element in misp_event.flatten_attributes:
-                        if element["value"] not in indicator_values:
+                        if element["value"] in existing_indicators:
+                            logger.debug("Skipping indicator because it's already in Defender {}".format(element["value"]))
+                            continue
+                            
+                        if element["value"] in indicator_values:
+                            logger.debug("Skipping indicator because it's already processed {}".format(element["value"]))
+                        else:
                             if element.get("to_ids", False) and \
                                         element.get("type", "") in UPLOAD_INDICATOR_MISP_ACCEPTED_TYPES:
                                 misp_indicator = RequestObject_Indicator(element, misp_event, logger)
@@ -96,25 +88,14 @@ def get_misp_events_upload_indicators():
                                         logger.debug("Skipping indicator because valid_until is in the past: {} {}".format(misp_indicator.valid_until, element["value"]))
                                         continue
                                 if misp_indicator.value != "":
-                                    skip_to_sentinel = False
-                                    if config.ms_check_if_exist_in_sentinel:
-                                        start_time = datetime.datetime.now(datetime.timezone.utc)
-                                        in_sentinel = already_in_sentinel(misp_indicator)
-                                        end_time = datetime.datetime.now(datetime.timezone.utc)
-                                        duration = end_time - start_time
-                                        #logger.info("already_in_sentinel check duration for %s: %s", misp_indicator.pattern, str(duration))
-                                        if in_sentinel:
-                                            skip_to_sentinel = True
-                                            logger.debug("Skipping indicator already in Sentinel: {}}".format(misp_indicator.value))
-                                    if not skip_to_sentinel:
+                                    indicator_get_defender = misp_indicator.get_defender()
+                                    if indicator_get_defender:
                                         if config.verbose_log:
                                             logger.debug("Add {} to list of indicators to upload".format(misp_indicator.value))
-                                        indicator_get_defender = misp_indicator.get_defender()
-                                        if indicator_get_defender:
-                                            result_set.append(indicator_get_defender)
-                                            indicator_values.append(element["value"])
-                                        else:
-                                            logger.error("Unable to add {} of type {} to Defender. Not mapped.".format(misp_indicator.value, misp_indicator.attr_type))
+                                        result_set.append(indicator_get_defender)
+                                        indicator_values.append(element["value"])
+                                    else:
+                                        logger.error("Unable to add {} of type {} to Defender. Not mapped.".format(misp_indicator.value, misp_indicator.attr_type))
                             
                 logger.info("Processed {} indicators".format(len(result_set)))
                 indicator_count = indicator_count + len(result_set)
@@ -149,9 +130,52 @@ def write_parsed_indicators(parsed_indicators):
     with open(PARSED_INDICATORS_FILE_NAME, "a") as fp:
         fp.write(json_formatted_str)
 
+def get_headers_with_access_token():
+    headers = False
+    data = {
+        'client_id': config.graph_auth["client_id"],
+        'grant_type': 'client_credentials',
+        'client_secret': config.graph_auth["client_secret"],
+        'scope': config.targetScope,
+        }
+    try:
+        access_token = requests.post("https://login.microsoftonline.com/{}/oauth2/v2.0/token".format(config.graph_auth["tenant"]), data=data)
+        if "access_token" in access_token.json():
+            headers = {"Authorization": "Bearer {}".format(access_token.json()["access_token"]), "Content-Type": "application/json"}
+            logger.info("Received access token for Microsoft Defender API")
+        else:
+            logger.error("No token received {}".format(access_token.text))
+            sys.exit()
+    except:
+        logger.error("No access token received")
+        sys.exit()  
+       
+    return headers
+
+def fetch_existing_indicators(existing_indicators):
+    headers = get_headers_with_access_token()
+    if headers:
+        response = requests.get("https://api.securitycenter.microsoft.com/api/indicators/", headers=headers)
+        # Optional filtering with ?$filter=action+eq+'{}'
+        if response.status_code == 200:
+            if "value" in response.json():
+                response_value = response.json()["value"]
+                logger.info("There are {} existing indicators in Defender".format(len(response_value)))
+                for entry in response_value:
+                     if entry["indicatorValue"] not in existing_indicators:
+                         existing_indicators.append(entry["indicatorValue"])
+                logger.info("Got {} unique indicators".format(len(existing_indicators)))
+        else:
+            logger.error("Did not receive response from Defender while querying for indicators {} {}".format(response.status_code, response.text))
+        
+    return existing_indicators
+    
 def main():
+    existing_indicators = []
+    if config.check_if_already_in_defender:
+        existing_indicators = fetch_existing_indicators(existing_indicators)
     logger.info("Fetching and parsing data from MISP {}".format(config.misp_domain))
-    total_indicators = get_misp_events_upload_indicators()
+    total_indicators = get_misp_events_upload_indicators(existing_indicators)
     logger.info("Received {} indicators in MISP".format(total_indicators))
 
 
@@ -170,9 +194,4 @@ if __name__ == '__main__':
 
     logger.info("Start MISP2Defender")
     main()
-
     logger.info("End MISP2Defender")
-
-
-
-

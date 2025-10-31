@@ -48,4 +48,4 @@ defender_recommended_actions = "Block" # string
 defender_generate_alert = True   
 defender_action  = "Audit" # Warn, Block, Audit, Alert, AlertAndBlock, BlockAndRemediate, and Allowed.
 
-ms_check_if_exist_in_sentinel = True
+check_if_already_in_defender = True
