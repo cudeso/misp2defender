@@ -15,7 +15,13 @@ if config.misp_verifycert is False:
 
 
 def push_indicators_post(headers, push_indicator_sentinel):
-    logger.info("Pushing {} indicators to Defender".format(len(push_indicator_sentinel)))
+    request_body = {"Indicators": push_indicator_sentinel}
+    resp = requests.post("https://api.securitycenter.microsoft.com/api/indicators/import", headers=headers, json=request_body)
+    if "error" in resp.json():
+        logger.error(request_body)
+        logger.error("Error: {}".format(resp.json()["error"]))
+    else:
+        logger.info("Pushing {} indicators to Defender".format(len(push_indicator_sentinel)))
     return True
                          
 def already_in_sentinel(misp_indicator):
