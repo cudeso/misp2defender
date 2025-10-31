@@ -167,15 +167,18 @@ class RequestObject_Event:
         self.info = event["info"]
         self.id = event["id"]
         self.distribution = event["distribution"]
-        threat_level_id = event["threat_level_id"]
-        if threat_level_id == 1:
-            self.threat_level = "High"
-        elif threat_level_id == 2:
-            self.threat_level = "Medium"
-        elif threat_level_id == 3:
-            self.threat_level = "Low"
+        if hasattr(config, "defender_severity"):
+            self.threat_level = config.defender_severity
         else:
-            self.threat_level = "Informational"
+            threat_level_id = event["threat_level_id"]
+            if threat_level_id == "1":
+                self.threat_level = "High"
+            elif threat_level_id == "2":
+                self.threat_level = "Medium"
+            elif threat_level_id == "3":
+                self.threat_level = "Low"
+            else:
+                self.threat_level = "Informational"
 
         self.eventdate = event["date"]
         self.org = event["Orgc"]["name"].strip()
