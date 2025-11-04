@@ -23,16 +23,15 @@ def push_indicators_post(headers, push_indicator_sentinel):
     else:
         logger.info("Pushing {} indicators to Defender".format(len(push_indicator_sentinel)))
     return True
-                         
-def already_in_sentinel(misp_indicator):
-    return False
 
 def get_misp_events_upload_indicators(existing_indicators):
     misp = PyMISP(config.misp_domain, config.misp_key, config.misp_verifycert, False)
-    
+
     logger.debug("Query MISP for events")
     remaining_misp_pages = True
     indicator_count = 0
+    ignore_in_otx = 0
+    ignore_already_in_defender = 0
     misp_page = 1
 
     if config.write_parsed_indicators:
@@ -61,42 +60,68 @@ def get_misp_events_upload_indicators(existing_indicators):
                     misp_event = RequestObject_Event(event["Event"], logger, config.misp_flatten_attributes)
 
                     if config.write_parsed_eventid:
-                        logger.info("Processing event {} {}".format(event["Event"]["id"], event["Event"]["info"]))
+                        logger.info("Process event {} {} from {}".format(event["Event"]["id"], event["Event"]["info"], event["Event"]["Orgc"]["name"]))
 
                     for element in misp_event.flatten_attributes:
                         if element["value"] in existing_indicators:
-                            logger.debug("Skipping indicator because it's already in Defender {}".format(element["value"]))
+                            logger.debug("Skip indicator because already in Defender {}".format(element["value"]))
+                            ignore_already_in_defender += 1
                             continue
-                            
+
                         if element["value"] in indicator_values:
-                            logger.debug("Skipping indicator because it's already processed {}".format(element["value"]))
+                            logger.debug("Skip indicator because already processed {}".format(element["value"]))
                         else:
                             if element.get("to_ids", False) and \
                                         element.get("type", "") in UPLOAD_INDICATOR_MISP_ACCEPTED_TYPES:
                                 misp_indicator = RequestObject_Indicator(element, misp_event, logger)
+                                skip_indicator = False
+                                if hasattr(config, "exclude_if_in_alienvault"):
+                                    if config.exclude_if_in_alienvault:
+                                        from OTXv2 import OTXv2, IndicatorTypes
+                                        otx = OTXv2(config.otx_alienvault_api)
+                                        otx_indicator = {
+                                            "md5": IndicatorTypes.FILE_HASH_MD5,
+                                            "sha1": IndicatorTypes.FILE_HASH_SHA1,
+                                            "sha256": IndicatorTypes.FILE_HASH_SHA256,
+                                            "url": IndicatorTypes.URL,
+                                            "ip-dst": IndicatorTypes.IPv4,
+                                            "ip-src": IndicatorTypes.IPv4,
+                                            "domain": IndicatorTypes.DOMAIN,
+                                            "hostname": IndicatorTypes.HOSTNAME,
+                                        }
+                                        if element["type"] in otx_indicator:
+                                            try:
+                                              r = otx.get_indicator_details_full(otx_indicator[element["type"]], element["value"])
+                                              if len(r) > 0:
+                                                  logger.debug("Skip indicator because in OTX {}".format(element["value"]))
+                                                  ignore_in_otx += 1
+                                                  skip_indicator = True
+                                            except:
+                                                skip_indicator = False
 
-                                if misp_indicator.valid_until:
-                                    try:
-                                        vu_dt = datetime.datetime.strptime(misp_indicator.valid_until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
-                                    except Exception:
+                                if not skip_indicator:
+                                    if misp_indicator.valid_until:
                                         try:
-                                            vu_dt = datetime.datetime.fromisoformat(misp_indicator.valid_until.replace('Z', '+00:00'))
+                                            vu_dt = datetime.datetime.strptime(misp_indicator.valid_until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
                                         except Exception:
-                                            logger.debug("Unable to parse valid_until {}, skipping indicator {}".format(misp_indicator.valid_until, element["value"]))
+                                            try:
+                                                vu_dt = datetime.datetime.fromisoformat(misp_indicator.valid_until.replace('Z', '+00:00'))
+                                            except Exception:
+                                                logger.debug("Unable to parse valid_until {}, skipping indicator {}".format(misp_indicator.valid_until, element["value"]))
+                                                continue
+                                        if vu_dt <= datetime.datetime.now(datetime.timezone.utc):
+                                            logger.debug("Skip indicator because valid_until is in the past: {} {}".format(misp_indicator.valid_until, element["value"]))
                                             continue
-                                    if vu_dt <= datetime.datetime.now(datetime.timezone.utc):
-                                        logger.debug("Skipping indicator because valid_until is in the past: {} {}".format(misp_indicator.valid_until, element["value"]))
-                                        continue
-                                if misp_indicator.value != "":
-                                    indicator_get_defender = misp_indicator.get_defender()
-                                    if indicator_get_defender:
-                                        if config.verbose_log:
-                                            logger.debug("Add {} to list of indicators to upload".format(misp_indicator.value))
-                                        result_set.append(indicator_get_defender)
-                                        indicator_values.append(element["value"])
-                                    else:
-                                        logger.error("Unable to add {} of type {} to Defender. Not mapped.".format(misp_indicator.value, misp_indicator.attr_type))
-                            
+                                    if misp_indicator.value != "":
+                                        indicator_get_defender = misp_indicator.get_defender()
+                                        if indicator_get_defender:
+                                            if config.verbose_log:
+                                                logger.debug("Push {} from {} {}".format(misp_indicator.value, misp_event.info, misp_event.id))
+                                            result_set.append(indicator_get_defender)
+                                            indicator_values.append(element["value"])
+                                        else:
+                                            logger.error("Unable to add {} of type {} to Defender. Not mapped.".format(misp_indicator.value, misp_indicator.attr_type))
+
                 logger.info("Processed {} indicators".format(len(result_set)))
                 indicator_count = indicator_count + len(result_set)
                 misp_page += 1
@@ -123,7 +148,7 @@ def get_misp_events_upload_indicators(existing_indicators):
             remaining_misp_pages = False
             logger.error("Error when processing data from MISP {} - {} - {}".format(e, sys.exc_info()[2].tb_lineno, sys.exc_info()[1]))
 
-    return indicator_count
+    return indicator_count, ignore_already_in_defender, ignore_in_otx
 
 def write_parsed_indicators(parsed_indicators):
     json_formatted_str = json.dumps(parsed_indicators, indent=4)
@@ -148,8 +173,8 @@ def get_headers_with_access_token():
             sys.exit()
     except:
         logger.error("No access token received")
-        sys.exit()  
-       
+        sys.exit()
+
     return headers
 
 def fetch_existing_indicators(existing_indicators):
@@ -167,16 +192,16 @@ def fetch_existing_indicators(existing_indicators):
                 logger.info("Got {} unique indicators".format(len(existing_indicators)))
         else:
             logger.error("Did not receive response from Defender while querying for indicators {} {}".format(response.status_code, response.text))
-        
+
     return existing_indicators
-    
+
 def main():
     existing_indicators = []
     if config.check_if_already_in_defender:
         existing_indicators = fetch_existing_indicators(existing_indicators)
     logger.info("Fetching and parsing data from MISP {}".format(config.misp_domain))
-    total_indicators = get_misp_events_upload_indicators(existing_indicators)
-    logger.info("Received {} indicators in MISP".format(total_indicators))
+    total_indicators, ignore_already_in_defender, ignore_in_otx = get_misp_events_upload_indicators(existing_indicators)
+    logger.info("Pushed {} indicators from MISP. Skipped {} because already in Defender. Skipped {} because known in OTX.".format(total_indicators,ignore_already_in_defender, ignore_in_otx))
 
 
 if __name__ == '__main__':
@@ -195,3 +220,5 @@ if __name__ == '__main__':
     logger.info("Start MISP2Defender")
     main()
     logger.info("End MISP2Defender")
+
+

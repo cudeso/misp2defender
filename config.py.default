@@ -26,6 +26,8 @@ log_file = "misp2defender.log"
 dry_run = False
 misp_flatten_attributes = True
 
+exclude_if_in_alienvault = False
+otx_alienvault_api = ""
 
 write_parsed_eventid = True
 write_parsed_indicators = True
@@ -41,6 +43,7 @@ days_to_expire_mapping = {
                     "Url": 365,
                     "DomainName": 300,
                 }
+days_to_expire_tlpclear = 7
 
 defender_application = "MISP"
 defender_severity = "Medium"    # Informational, Low, Medium, and High.

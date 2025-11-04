@@ -11,7 +11,7 @@ class RequestObject_Indicator:
             "url": "Url",
             "domain": "DomainName",
             "hostname": "DomainName",
-            "hostname|port": "DomainName",            
+            "hostname|port": "DomainName",
             "ip-src": "IpAddress",
             "ip-dst": "IpAddress",
             "ip-src|port": "IpAddress",
@@ -79,25 +79,38 @@ class RequestObject_Indicator:
             if tag.get("name", "").startswith("course-of-action:passive="):
                 self.defender_action = "Audit"
             if tag.get("name", "").startswith("coa:detect="):
-                self.defender_action = "Audit"                
+                self.defender_action = "Audit"
             if tag.get("name", "").startswith("coa:discover="):
-                self.defender_action = "Audit"                
+                self.defender_action = "Audit"
             if tag.get("name", "").startswith("course-of-action:active="):
                 self.defender_action = "Block"
             if tag.get("name", "").startswith("coa:deny="):
-                self.defender_action = "Block"                
-            if tag.get("name", "").startswith("coa:degrade="):                
-                self.defender_action = "Block"                
-            if tag.get("name", "").startswith("coa:deceive="):  
-                self.defender_action = "Block"                          
-            if tag.get("name", "").startswith("coa:disrupt="):     
-                self.defender_action = "Block"                       
+                self.defender_action = "Block"
+            if tag.get("name", "").startswith("coa:degrade="):
+                self.defender_action = "Block"
+            if tag.get("name", "").startswith("coa:deceive="):
+                self.defender_action = "Block"
+            if tag.get("name", "").startswith("coa:disrupt="):
+                self.defender_action = "Block"
 
         if config.days_to_expire_ignore_misp_last_seen or not element.get("valid_until", False):
             days_to_expire = config.days_to_expire
 
+            # Custom mapping for TLPs
+            override_expire = False
+            if hasattr(config, "days_to_expire_tlpclear"):
+                if len(self.misp_event.tag) > 0:
+                    for tag in self.misp_event.tag:
+                        days_to_expire_tlpclear_tags = ["tlp:clear", "tlp:white"]
+                        for d in days_to_expire_tlpclear_tags:
+                            if d.lower().strip() in tag["name"].lower().strip():
+                                days_to_expire = config.days_to_expire_tlpclear
+                                override_expire = True
+            if override_expire:
+                self.description = "{} - {}".format(self.description, "Limited expiration date due to tlp:clear")
+
             # If we have a mapping, then we use a custom number of days to expire
-            if hasattr(config, "days_to_expire_mapping"):
+            if not override_expire and hasattr(config, "days_to_expire_mapping"):
                 for el in config.days_to_expire_mapping:
                     if el.strip().lower() in self.attr_type_mapping.lower():
                         days_to_expire = config.days_to_expire_mapping[el]
@@ -109,7 +122,7 @@ class RequestObject_Indicator:
             if date_object:
                 self.valid_until = self.ts_to_iso(date_object.timestamp())
             else:
-                self.logger.error("Could not set valid_until for indicator {}".format(self.pattern))    
+                self.logger.error("Could not set valid_until for indicator {}".format(self.pattern))
 
     def get_defender(self):
 
@@ -131,7 +144,7 @@ class RequestObject_Indicator:
             }
             return indicator_defender
         return False
-    
+
     def ts_to_iso(self, ts: int | str | None) -> str:
         if not ts:
             return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -144,6 +157,7 @@ class RequestObject_Indicator:
 
 class RequestObject_Event:
     def __init__(self, event, logger, misp_flatten_attributes=False):
+        self.tag = event["Tag"]
         if misp_flatten_attributes:
             object_attributes = []
             for misp_object in event["Object"]:
