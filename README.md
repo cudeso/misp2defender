@@ -1,6 +1,22 @@
 # MISP2Defender
 
-This integration syncs attributes from your **MISP** instance to Microsoft **Defender**.
+![misp2defender_small.png](misp2defender_small.png)
+
+Push threat intelligence from **MISP** to Microsoft **Defender** for Endpoint. This integration automatically syncs indicators of compromise (IoCs) from your MISP instance to Defender's threat intelligence database, enabling real-time blocking and alerting on malicious indicators.
+
+## Features
+
+- **Automated sync**: Pull indicators from MISP and push them to Defender on a schedule
+- **Flexible filtering**: Query specific MISP events by tags, publication status, timestamps, or warning lists
+- **Smart expiration**: Set different expiration times per indicator type (IPs expire faster than file hashes)
+- **Duplicate detection**: Check existing Defender indicators before pushing to avoid duplicates
+- **Custom user agent**: Configurable browser user agent for Microsoft API requests
+- **Batch processing**: Push indicators in configurable batch sizes to respect API rate limits
+- **AlienVault OTX integration**: Optionally skip indicators already known in OTX
+- **Dry run mode**: Test configuration without actually pushing to Defender
+- **Detailed logging**: Debug mode with parsed indicator output for troubleshooting
+- **TLP support**: Shorter expiration for TLP:CLEAR indicators
+- **Pagination**: Handle large MISP result sets with configurable page sizes
 
 # Setup
 
