@@ -14,6 +14,17 @@ if config.misp_verifycert is False:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+def get_custom_user_agent():
+    """
+    Returns a custom browser user agent string for Microsoft requests.
+    Modify this function to customize the user agent as needed.
+    """
+    if hasattr(config, 'custom_user_agent') and config.custom_user_agent:
+        return config.custom_user_agent
+    # Default to a common browser user agent
+    return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+
 def push_indicators_post(headers, push_indicator_sentinel):
     request_body = {"Indicators": push_indicator_sentinel}
     resp = requests.post("https://api.securitycenter.microsoft.com/api/indicators/import", headers=headers, json=request_body)
@@ -166,7 +177,11 @@ def get_headers_with_access_token():
     try:
         access_token = requests.post("https://login.microsoftonline.com/{}/oauth2/v2.0/token".format(config.graph_auth["tenant"]), data=data)
         if "access_token" in access_token.json():
-            headers = {"Authorization": "Bearer {}".format(access_token.json()["access_token"]), "Content-Type": "application/json"}
+            headers = {
+                "Authorization": "Bearer {}".format(access_token.json()["access_token"]), 
+                "Content-Type": "application/json",
+                "User-Agent": get_custom_user_agent()
+            }
             logger.info("Received access token for Microsoft Defender API")
         else:
             logger.error("No token received {}".format(access_token.text))
