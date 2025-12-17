@@ -52,3 +52,6 @@ defender_generate_alert = True
 defender_action  = "Audit" # Warn, Block, Audit, Alert, AlertAndBlock, BlockAndRemediate, and Allowed.
 
 check_if_already_in_defender = True
+
+limit_vetted_attributes_from_specific_events = ["curation:source=\"MISP-TEST\""]
+vetted_attribute_classifier = ["course-of-action:active=\"deny\""]

@@ -200,6 +200,19 @@ check_if_already_in_defender = True
 
 Fetch existing Defender indicators before pushing. Skips duplicates but adds initial overhead. Turn off if you're pushing to an empty Defender instance.
 
+## Vetted attribute filtering
+
+```python
+limit_vetted_attributes_from_specific_events = ["curation:source=\"MISP-TEST\""]
+vetted_attribute_classifier = ["course-of-action:active=\"deny\""]
+```
+
+Control which attributes are uploaded from specific events:
+- `limit_vetted_attributes_from_specific_events`: List of event tags that trigger vetted-only mode. When an event has any of these tags, only attributes with vetted tags will be uploaded.
+- `vetted_attribute_classifier`: List of attribute tags that mark an indicator as "vetted". Attributes must have at least one of these tags to be uploaded from events marked for vetting.
+
+**Example workflow**: If you have events tagged with `curation:source="MISP-TEST"`, only attributes tagged with `course-of-action:active="deny"` will be uploaded to Defender. This ensures only reviewed/approved indicators from specific sources reach production.
+
 # Running the Integration
 
 ## Manual test run

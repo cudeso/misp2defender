@@ -28,11 +28,15 @@ def get_custom_user_agent():
 def push_indicators_post(headers, push_indicator_sentinel):
     request_body = {"Indicators": push_indicator_sentinel}
     resp = requests.post("https://api.securitycenter.microsoft.com/api/indicators/import", headers=headers, json=request_body)
-    if "error" in resp.json():
-        logger.error(request_body)
-        logger.error("Error: {}".format(resp.json()["error"]))
-    else:
-        logger.info("Pushing {} indicators to Defender".format(len(push_indicator_sentinel)))
+    try:
+        resp_json = resp.json()
+        if "error" in resp_json:
+            logger.error(request_body)
+            logger.error("Error: {}".format(resp_json["error"]))
+        else:
+            logger.info("Pushing {} indicators to Defender".format(len(push_indicator_sentinel)))
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON response: {}".format(resp.text))
     return True
 
 def get_misp_events_upload_indicators(existing_indicators):
@@ -50,9 +54,12 @@ def get_misp_events_upload_indicators(existing_indicators):
         with open(PARSED_INDICATORS_FILE_NAME, "w") as fp:
             fp.write("")
 
-    headers = get_headers_with_access_token()
-    if not headers:
-        return False
+    if not config.dry_run:
+        headers = get_headers_with_access_token()
+        if not headers:
+            return False
+    else:
+        logger.info("Dry run. Not uploading to Defender")
 
     while remaining_misp_pages:
         result_set = []
@@ -67,11 +74,19 @@ def get_misp_events_upload_indicators(existing_indicators):
 
             if len(result) > 0:
                 logger.info("Received MISP events page {} with {} events".format(misp_page, len(result)))
+                
                 for event in result:
                     misp_event = RequestObject_Event(event["Event"], logger, config.misp_flatten_attributes)
+                    check_for_vetted = False
 
                     if config.write_parsed_eventid:
                         logger.info("Process event {} {} from {}".format(event["Event"]["id"], event["Event"]["info"], event["Event"]["Orgc"]["name"]))
+
+                    event_tags_lower = [tag["name"].lower() for tag in misp_event.tag]  
+                    for tag in config.limit_vetted_attributes_from_specific_events:
+                        if tag.lower() in event_tags_lower:
+                            check_for_vetted = True
+                            logger.debug("Event {} {} requires vetted attributes only".format(misp_event.id, misp_event.info))
 
                     for element in misp_event.flatten_attributes:
                         if element["value"] in existing_indicators:
@@ -85,7 +100,19 @@ def get_misp_events_upload_indicators(existing_indicators):
                             if element.get("to_ids", False) and \
                                         element.get("type", "") in UPLOAD_INDICATOR_MISP_ACCEPTED_TYPES:
                                 misp_indicator = RequestObject_Indicator(element, misp_event, logger)
+
                                 skip_indicator = False
+
+                                if check_for_vetted:
+                                    attribute_tags_lower = [tag["name"].lower() for tag in element.get("Tag", [])]
+                                    vetted_tags_lower = [t.lower() for t in config.vetted_attribute_classifier]
+                                    is_vetted = any(tag in vetted_tags_lower for tag in attribute_tags_lower)
+                                    
+                                    if is_vetted:
+                                        logger.debug("Attribute {} is vetted, will be uploaded".format(misp_indicator.value))
+                                    else:
+                                        skip_indicator = True
+
                                 if hasattr(config, "exclude_if_in_alienvault"):
                                     if config.exclude_if_in_alienvault:
                                         from OTXv2 import OTXv2, IndicatorTypes
@@ -107,8 +134,8 @@ def get_misp_events_upload_indicators(existing_indicators):
                                                   logger.debug("Skip indicator because in OTX {}".format(element["value"]))
                                                   ignore_in_otx += 1
                                                   skip_indicator = True
-                                            except:
-                                                skip_indicator = False
+                                            except Exception as e:
+                                                logger.debug("Error checking OTX for {}: {}".format(element["value"], e))
 
                                 if not skip_indicator:
                                     if misp_indicator.valid_until:
@@ -139,11 +166,7 @@ def get_misp_events_upload_indicators(existing_indicators):
             else:
                 remaining_misp_pages = False
 
-            if config.dry_run:
-                logger.info("Dry run. Not uploading to Defender")
-                if config.write_parsed_indicators:
-                    write_parsed_indicators(result_set)
-            else:
+            if not config.dry_run:
                 counter = 0
                 while len(result_set) > 0:
                     counter += 1
@@ -212,8 +235,9 @@ def fetch_existing_indicators(existing_indicators):
 
 def main():
     existing_indicators = []
-    if config.check_if_already_in_defender:
-        existing_indicators = fetch_existing_indicators(existing_indicators)
+    if not config.dry_run:
+        if config.check_if_already_in_defender:
+            existing_indicators = fetch_existing_indicators(existing_indicators)
     logger.info("Fetching and parsing data from MISP {}".format(config.misp_domain))
     total_indicators, ignore_already_in_defender, ignore_in_otx = get_misp_events_upload_indicators(existing_indicators)
     logger.info("Pushed {} indicators from MISP. Skipped {} because already in Defender. Skipped {} because known in OTX.".format(total_indicators,ignore_already_in_defender, ignore_in_otx))
