@@ -30,6 +30,12 @@ def push_indicators_post(headers, push_indicator_sentinel):
     resp = requests.post("https://api.securitycenter.microsoft.com/api/indicators/import", headers=headers, json=request_body)
     try:
         resp_json = resp.json()
+        
+        # Log JSON response to file if configured
+        if hasattr(config, 'log_json_file') and config.log_json_file:
+            with open(config.log_json_file, "a") as json_log:
+                json_log.write(json.dumps(resp_json, indent=2) + "\n")
+        
         if "error" in resp_json:
             logger.error(request_body)
             logger.error("Error: {}".format(resp_json["error"]))

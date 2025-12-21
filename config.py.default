@@ -23,6 +23,7 @@ misp_event_limit_per_page = 100
 
 verbose_log = True
 log_file = "misp2defender.log"
+log_json_file = ""
 dry_run = False
 misp_flatten_attributes = True
 

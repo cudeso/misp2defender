@@ -123,6 +123,7 @@ The `misp_event_limit_per_page` sets pagination size when fetching events.
 ```python
 verbose_log = True
 log_file = "misp2defender.log"
+log_json_file = ""
 dry_run = False
 write_parsed_eventid = True
 write_parsed_indicators = True
@@ -130,6 +131,7 @@ write_parsed_indicators = True
 
 - `verbose_log`: Enable detailed debug logging
 - `log_file`: Where to write logs
+- `log_json_file`: Log raw JSON responses from Defender API to this file (leave empty to disable)
 - `dry_run`: Test run without actually pushing to Defender
 - `write_parsed_eventid`: Log each event ID being processed
 - `write_parsed_indicators`: Write parsed indicators to a JSON file for review
