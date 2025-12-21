@@ -243,7 +243,7 @@ def fetch_existing_indicators(existing_indicators):
             logger.error("Did not receive response from Defender while querying for indicators {} {}".format(response.status_code, response.text))
 
         if reached_query_limit_defender:
-            response = requests.get("https://api.securitycenter.microsoft.com/api/indicators/$skip=10000", headers=headers)
+            response = requests.get("https://api.securitycenter.microsoft.com/api/indicators/?$skip=10000", headers=headers)
             if response.status_code == 200:
                 if "value" in response.json():
                     response_value = response.json()["value"]
