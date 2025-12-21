@@ -88,11 +88,12 @@ def get_misp_events_upload_indicators(existing_indicators):
                     if config.write_parsed_eventid:
                         logger.info("Process event {} {} from {}".format(event["Event"]["id"], event["Event"]["info"], event["Event"]["Orgc"]["name"]))
 
-                    event_tags_lower = [tag["name"].lower() for tag in misp_event.tag]  
-                    for tag in config.limit_vetted_attributes_from_specific_events:
-                        if tag.lower() in event_tags_lower:
-                            check_for_vetted = True
-                            logger.debug("Event {} {} requires vetted attributes only".format(misp_event.id, misp_event.info))
+                    event_tags_lower = [tag["name"].lower() for tag in misp_event.tag]
+                    if hasattr(config, "limit_vetted_attributes_from_specific_events"):
+                        for tag in config.limit_vetted_attributes_from_specific_events:
+                            if tag.lower() in event_tags_lower:
+                                check_for_vetted = True
+                                logger.debug("Event {} {} requires vetted attributes only".format(misp_event.id, misp_event.info))
 
                     for element in misp_event.flatten_attributes:
                         if element["value"] in existing_indicators:
@@ -223,6 +224,7 @@ def get_headers_with_access_token():
 
 def fetch_existing_indicators(existing_indicators):
     headers = get_headers_with_access_token()
+    reached_query_limit_defender = False # Query limit is set by Defender to 10000
     if headers:
         response = requests.get("https://api.securitycenter.microsoft.com/api/indicators/", headers=headers)
         # Optional filtering with ?$filter=action+eq+'{}'
@@ -230,6 +232,9 @@ def fetch_existing_indicators(existing_indicators):
             if "value" in response.json():
                 response_value = response.json()["value"]
                 logger.info("There are {} existing indicators in Defender".format(len(response_value)))
+                if len(response_value) >= 10000:
+                    reached_query_limit_defender = True
+                    logger.warning("Reached query limit of 10000 indicators from Defender.")   
                 for entry in response_value:
                      if entry["indicatorValue"] not in existing_indicators:
                          existing_indicators.append(entry["indicatorValue"])
@@ -237,6 +242,21 @@ def fetch_existing_indicators(existing_indicators):
         else:
             logger.error("Did not receive response from Defender while querying for indicators {} {}".format(response.status_code, response.text))
 
+        if reached_query_limit_defender:
+            response = requests.get("https://api.securitycenter.microsoft.com/api/indicators/$skip=10000", headers=headers)
+            if response.status_code == 200:
+                if "value" in response.json():
+                    response_value = response.json()["value"]
+                    logger.info("There are {} additional existing indicators in Defender".format(len(response_value)))
+                    if len(response_value) >= 10000:
+                        reached_query_limit_defender = True
+                        logger.warning("Reached query limit of 10000 indicators from Defender.")   
+                    for entry in response_value:
+                        if entry["indicatorValue"] not in existing_indicators:
+                            existing_indicators.append(entry["indicatorValue"])
+                    logger.info("Got {} unique indicators".format(len(existing_indicators)))
+            else:
+                logger.error("Did not receive response from Defender while querying for indicators {} {}".format(response.status_code, response.text))
     return existing_indicators
 
 def main():
