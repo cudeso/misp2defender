@@ -111,7 +111,7 @@ misp_event_limit_per_page = 100
 
 Controls which MISP events get processed. You can filter by:
 - `published`: Only grab published events
-- `tags`: Filter by specific MISP tags (supports multiple)
+- `tags`: Filter by specific MISP tags. If you want to combine multiple tags you can use a filter such as `'tags': {"AND": ["workflow:state=\"complete\"", "curation:target=\"selected-export\""]},`
 - `enforceWarninglist`: Skip indicators on MISP warning lists
 - `publish_timestamp`: Time window (e.g., '2d' for last 2 days, '1h' for last hour)
 - Other filters: `eventid`, `date_from`, `date_to`, `last`, `limit`, etc.
@@ -250,3 +250,19 @@ Or run it daily at 2 AM:
 ```
 
 The frequency depends on how often your MISP events update and how quickly you need indicators in Defender.
+
+# Older Python versions
+
+If you're using an older Python version (3.8) then in `RequestObject.py`
+
+1. Import Union
+
+```
+from typing import Union
+```
+
+2. Change ts_to_iso
+
+```
+def ts_to_iso(self, ts: Union[str, int]) -> str:
+```

@@ -89,7 +89,7 @@ def get_misp_events_upload_indicators(existing_indicators):
                         logger.info("Process event {} {} from {}".format(event["Event"]["id"], event["Event"]["info"], event["Event"]["Orgc"]["name"]))
 
                     event_tags_lower = [tag["name"].lower() for tag in misp_event.tag]
-                    if hasattr(config, "limit_vetted_attributes_from_specific_events"):
+                    if hasattr(config, "limit_vetted_attributes_from_specific_events") and hasattr(config, "vetted_attribute_classifier"):
                         for tag in config.limit_vetted_attributes_from_specific_events:
                             if tag.lower() in event_tags_lower:
                                 check_for_vetted = True
@@ -118,6 +118,7 @@ def get_misp_events_upload_indicators(existing_indicators):
                                     if is_vetted:
                                         logger.debug("Attribute {} is vetted, will be uploaded".format(misp_indicator.value))
                                     else:
+                                        logger.debug("Attribute {} is not vetted, will be skipped".format(misp_indicator.value))                                        
                                         skip_indicator = True
 
                                 if hasattr(config, "exclude_if_in_alienvault"):
@@ -172,6 +173,10 @@ def get_misp_events_upload_indicators(existing_indicators):
                 misp_page += 1
             else:
                 remaining_misp_pages = False
+
+            # Write indicators
+            if config.write_parsed_indicators:
+                write_parsed_indicators(result_set) 
 
             if not config.dry_run:
                 counter = 0
