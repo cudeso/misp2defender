@@ -28,6 +28,7 @@ dry_run = False
 misp_flatten_attributes = True
 
 exclude_if_in_alienvault = False
+exclude_alienvault_check = []
 otx_alienvault_api = ""
 
 write_parsed_eventid = True

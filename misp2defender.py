@@ -54,6 +54,23 @@ def get_misp_events_upload_indicators(existing_indicators):
     ignore_in_otx = 0
     ignore_already_in_defender = 0
     misp_page = 1
+    
+    # Initialize OTX once if AlienVault checking is enabled
+    otx = None
+    otx_indicator = None
+    if hasattr(config, "exclude_if_in_alienvault") and config.exclude_if_in_alienvault:
+        from OTXv2 import OTXv2, IndicatorTypes
+        otx = OTXv2(config.otx_alienvault_api)
+        otx_indicator = {
+            "md5": IndicatorTypes.FILE_HASH_MD5,
+            "sha1": IndicatorTypes.FILE_HASH_SHA1,
+            "sha256": IndicatorTypes.FILE_HASH_SHA256,
+            "url": IndicatorTypes.URL,
+            "ip-dst": IndicatorTypes.IPv4,
+            "ip-src": IndicatorTypes.IPv4,
+            "domain": IndicatorTypes.DOMAIN,
+            "hostname": IndicatorTypes.HOSTNAME,
+        }
 
     if config.write_parsed_indicators:
         # Clear existing parsed indicators file
@@ -61,11 +78,12 @@ def get_misp_events_upload_indicators(existing_indicators):
             fp.write("")
 
     if not config.dry_run:
-        headers = get_headers_with_access_token()
+        headers, token_timestamp = get_headers_with_access_token()
         if not headers:
-            return False
+            return 0, 0, 0
     else:
         logger.info("Dry run. Not uploading to Defender")
+        token_timestamp = None
 
     while remaining_misp_pages:
         result_set = []
@@ -121,20 +139,16 @@ def get_misp_events_upload_indicators(existing_indicators):
                                         logger.debug("Attribute {} is not vetted, will be skipped".format(misp_indicator.value))                                        
                                         skip_indicator = True
 
-                                if hasattr(config, "exclude_if_in_alienvault"):
-                                    if config.exclude_if_in_alienvault:
-                                        from OTXv2 import OTXv2, IndicatorTypes
-                                        otx = OTXv2(config.otx_alienvault_api)
-                                        otx_indicator = {
-                                            "md5": IndicatorTypes.FILE_HASH_MD5,
-                                            "sha1": IndicatorTypes.FILE_HASH_SHA1,
-                                            "sha256": IndicatorTypes.FILE_HASH_SHA256,
-                                            "url": IndicatorTypes.URL,
-                                            "ip-dst": IndicatorTypes.IPv4,
-                                            "ip-src": IndicatorTypes.IPv4,
-                                            "domain": IndicatorTypes.DOMAIN,
-                                            "hostname": IndicatorTypes.HOSTNAME,
-                                        }
+                                if otx and otx_indicator:
+                                    # Check if we should skip AlienVault check for events with specific tags
+                                    skip_alienvault_check = False
+                                    if hasattr(config, "exclude_alienvault_check") and config.exclude_alienvault_check:
+                                        exclude_alienvault_check_lower = [tag.lower() for tag in config.exclude_alienvault_check]
+                                        if any(tag in exclude_alienvault_check_lower for tag in event_tags_lower):
+                                            skip_alienvault_check = True
+                                            logger.debug("Event {} {} has tag that excludes AlienVault check".format(misp_event.id, misp_event.info))
+                                    
+                                    if not skip_alienvault_check:
                                         if element["type"] in otx_indicator:
                                             try:
                                               r = otx.get_indicator_details_full(otx_indicator[element["type"]], element["value"])
@@ -143,7 +157,7 @@ def get_misp_events_upload_indicators(existing_indicators):
                                                   ignore_in_otx += 1
                                                   skip_indicator = True
                                             except Exception as e:
-                                                logger.debug("Error checking OTX for {}: {}".format(element["value"], e))
+                                                logger.debug("OTX for {}: {}".format(element["value"], e))
 
                                 if not skip_indicator:
                                     if misp_indicator.valid_until:
@@ -187,6 +201,11 @@ def get_misp_events_upload_indicators(existing_indicators):
                         time.sleep(62)
                         counter = 0
 
+                    # Check if token needs refresh (older than 3500 seconds)
+                    if token_timestamp and (time.time() - token_timestamp) > 3500:
+                        logger.info("Access token expired, requesting new token")
+                        headers, token_timestamp = get_headers_with_access_token()
+
                     push_indicators_post(headers, result_set[:config.max_indicators_per_query])
                     result_set = result_set[config.max_indicators_per_query:]
 
@@ -203,6 +222,7 @@ def write_parsed_indicators(parsed_indicators):
 
 def get_headers_with_access_token():
     headers = False
+    token_timestamp = None
     data = {
         'client_id': config.graph_auth["client_id"],
         'grant_type': 'client_credentials',
@@ -217,6 +237,7 @@ def get_headers_with_access_token():
                 "Content-Type": "application/json",
                 "User-Agent": get_custom_user_agent()
             }
+            token_timestamp = time.time()
             logger.info("Received access token for Microsoft Defender API")
         else:
             logger.error("No token received {}".format(access_token.text))
@@ -225,10 +246,10 @@ def get_headers_with_access_token():
         logger.error("No access token received")
         sys.exit()
 
-    return headers
+    return headers, token_timestamp
 
 def fetch_existing_indicators(existing_indicators):
-    headers = get_headers_with_access_token()
+    headers, _ = get_headers_with_access_token()
     reached_query_limit_defender = False # Query limit is set by Defender to 10000
     if headers:
         response = requests.get("https://api.securitycenter.microsoft.com/api/indicators/", headers=headers)
