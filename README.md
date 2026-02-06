@@ -48,7 +48,7 @@ You need an Microsoft **Entra application** (previously an Azure App registratio
 3. Enter an application name, and choose **Register**.
 4. Note the **Application ID** (client) and **Directory ID** (tenant)
 5. Under Manage, **Certificates & secrets**, choose **New client secret** and add a description. A new secret will be displayed in the **Value** column. Copy this password, it will not be shown again.
-6. Assign the **API permissions**. You need at least **Ti.ReadWrite.All**. But in case you want to use the feature to check if indicators already exist in Defender, it's best to allow  **Ti.Read.All** and  **Ti.ReadWrite** as well. Use **Application** permission.
+6. Assign **API permissions** for the app to access the **WindowsDefenderATP** API. You need at least **Ti.ReadWrite.All**. But in case you want to use the feature to check if indicators already exist in Defender, it's best to allow  **Ti.Read.All** and  **Ti.ReadWrite** as well. Use **Application** permission.
 
 ![misp2defender-api-perm.png](misp2defender-api-perm.png)
 
