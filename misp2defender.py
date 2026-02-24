@@ -139,25 +139,26 @@ def get_misp_events_upload_indicators(existing_indicators):
                                         logger.debug("Attribute {} is not vetted, will be skipped".format(misp_indicator.value))                                        
                                         skip_indicator = True
 
-                                if otx and otx_indicator:
-                                    # Check if we should skip AlienVault check for events with specific tags
-                                    skip_alienvault_check = False
-                                    if hasattr(config, "exclude_alienvault_check") and config.exclude_alienvault_check:
-                                        exclude_alienvault_check_lower = [tag.lower() for tag in config.exclude_alienvault_check]
-                                        if any(tag in exclude_alienvault_check_lower for tag in event_tags_lower):
-                                            skip_alienvault_check = True
-                                            logger.debug("Event {} {} has tag that excludes AlienVault check".format(misp_event.id, misp_event.info))
-                                    
-                                    if not skip_alienvault_check:
-                                        if element["type"] in otx_indicator:
-                                            try:
-                                              r = otx.get_indicator_details_full(otx_indicator[element["type"]], element["value"])
-                                              if len(r) > 0:
-                                                  logger.debug("Skip indicator because in OTX {}".format(element["value"]))
-                                                  ignore_in_otx += 1
-                                                  skip_indicator = True
-                                            except Exception as e:
-                                                logger.debug("OTX for {}: {}".format(element["value"], e))
+                                if not skip_indicator:
+                                    if otx and otx_indicator:
+                                        # Check if we should skip AlienVault check for events with specific tags
+                                        skip_alienvault_check = False
+                                        if hasattr(config, "exclude_alienvault_check") and config.exclude_alienvault_check:
+                                            exclude_alienvault_check_lower = [tag.lower() for tag in config.exclude_alienvault_check]
+                                            if any(tag in exclude_alienvault_check_lower for tag in event_tags_lower):
+                                                skip_alienvault_check = True
+                                                logger.debug("Event {} {} has tag that excludes AlienVault check".format(misp_event.id, misp_event.info))
+                                        
+                                        if not skip_alienvault_check:
+                                            if element["type"] in otx_indicator:
+                                                try:
+                                                  r = otx.get_indicator_details_full(otx_indicator[element["type"]], element["value"])
+                                                  if len(r) > 0:
+                                                      logger.debug("Skip indicator because in OTX {}".format(element["value"]))
+                                                      ignore_in_otx += 1
+                                                      skip_indicator = True
+                                                except Exception as e:
+                                                    logger.debug("OTX for {}: {}".format(element["value"], e))
 
                                 if not skip_indicator:
                                     if misp_indicator.valid_until:
