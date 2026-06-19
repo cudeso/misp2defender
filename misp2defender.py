@@ -25,6 +25,20 @@ def get_custom_user_agent():
     return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
+def is_attribute_timestamp_recent(attribute_timestamp, days):
+    """
+    Check whether an attribute's timestamp is within the configured window.
+    """
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        return True
+    if days <= 0:
+        return True
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+    return attribute_timestamp >= cutoff
+
+
 def push_indicators_post(headers, push_indicator_sentinel):
     request_body = {"Indicators": push_indicator_sentinel}
     resp = requests.post("https://api.securitycenter.microsoft.com/api/indicators/import", headers=headers, json=request_body)
@@ -127,6 +141,17 @@ def get_misp_events_upload_indicators(existing_indicators):
                                 misp_indicator = RequestObject_Indicator(element, misp_event, logger)
 
                                 skip_indicator = False
+
+                                if hasattr(config, "consider_attribute_timestamp") and config.consider_attribute_timestamp:
+                                    attribute_dt = None
+                                    try:
+                                        attribute_dt = datetime.datetime.fromtimestamp(int(element.get("timestamp")), tz=datetime.timezone.utc)
+                                    except (TypeError, ValueError):
+                                        attribute_dt = None
+                                    if attribute_dt and not is_attribute_timestamp_recent(attribute_dt, config.days_to_expire):
+                                        logger.info("Discard indicator {} because attribute timestamp {} is older than {} days".format(
+                                            element["value"], attribute_dt.isoformat(), config.days_to_expire))
+                                        continue
 
                                 if check_for_vetted:
                                     attribute_tags_lower = [tag["name"].lower() for tag in element.get("Tag", [])]

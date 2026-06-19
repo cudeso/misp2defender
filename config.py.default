@@ -36,6 +36,9 @@ write_parsed_indicators = True
 
 days_to_expire_ignore_misp_last_seen = True
 days_to_expire = 50
+# When True, discard indicators whose attribute timestamp is older than
+# days_to_expire days (the attribute is logged when discarded).
+consider_attribute_timestamp = False
 days_to_expire_start = "valid_from" #"valid_from" | "current_date"
 days_to_expire_mapping = {
                     "IpAddress": 90,
