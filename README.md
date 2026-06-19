@@ -160,6 +160,7 @@ Skip indicators that already exist in AlienVault OTX. Requires an OTX API key. S
 ```python
 days_to_expire_ignore_misp_last_seen = True
 days_to_expire = 50
+consider_attribute_timestamp = False
 days_to_expire_start = "valid_from"  # "valid_from" | "current_date"
 days_to_expire_mapping = {
     "IpAddress": 90,
@@ -174,6 +175,7 @@ days_to_expire_tlpclear = 7
 
 Controls when indicators expire in Defender:
 - `days_to_expire`: Default expiration in days
+- `consider_attribute_timestamp`: When `True`, discard indicators whose MISP attribute timestamp is older than `days_to_expire` days (the discarded attribute is logged)
 - `days_to_expire_start`: Calculate expiration from indicator creation (`valid_from`) or upload time (`current_date`)
 - `days_to_expire_mapping`: Override expiration per indicator type. File hashes typically stay valid longer than IPs.
 - `days_to_expire_tlpclear`: Short expiration for TLP:CLEAR indicators
