@@ -219,6 +219,14 @@ Control which attributes are uploaded from specific events:
 
 **Example workflow**: If you have events tagged with `curation:source="MISP-TEST"`, only attributes tagged with `course-of-action:active="deny"` will be uploaded to Defender. This ensures only reviewed/approved indicators from specific sources reach production.
 
+## Always exclude attributes
+
+```python
+exclude_always_from_defender = ["curation:curated=\"exclude_from_defender\""]
+```
+
+- `exclude_always_from_defender`: Attributes carrying any of these tags are never exported to Defender, regardless of any other filtering rule (leave empty `[]` to disable).
+
 # Running the Integration
 
 ## Manual test run

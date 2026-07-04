@@ -1,46 +1,48 @@
+# Microsoft Entra application credentials (all three are required)
 graph_auth = {
   'tenant': '',
   'client_id': '',
   'client_secret': '',
 }
 
-max_indicators_per_query=450
-quota_requests=25
-targetScope = 'https://api.securitycenter.windows.com/.default'
+max_indicators_per_query=450   # Indicators pushed per request (keep below 500)
+quota_requests=25              # Max API calls per minute before throttling
+targetScope = 'https://api.securitycenter.windows.com/.default'   # OAuth scope, leave as default
 
 
-misp_domain = ''
-misp_key = ''
-misp_verifycert = False
+misp_domain = ''             # Full URL to your MISP instance
+misp_key = ''                # MISP API key with read access
+misp_verifycert = False      # Set to True when MISP uses a valid SSL cert
 
+# Which MISP events to process (see README for more filter options)
 misp_event_filters = {
     'published': True,
     'tags': ["workflow:state=\"complete\""],
     'enforceWarninglist': True,
     'publish_timestamp': '2d',
 }
-misp_event_limit_per_page = 100
+misp_event_limit_per_page = 100   # Pagination size when fetching events
 
-verbose_log = True
+verbose_log = True           # Enable detailed debug logging
 log_file = "misp2defender.log"
-log_json_file = ""
-dry_run = False
-misp_flatten_attributes = True
+log_json_file = ""           # Log raw Defender API JSON here (empty to disable)
+dry_run = False              # Test run without pushing to Defender
+misp_flatten_attributes = True   # Process object attributes as individual indicators
 
-exclude_if_in_alienvault = False
-exclude_alienvault_check = []
-otx_alienvault_api = ""
+exclude_if_in_alienvault = False   # Skip indicators already known in AlienVault OTX
+exclude_alienvault_check = []      # Event tags that bypass the OTX check
+otx_alienvault_api = ""            # OTX API key (required when the OTX check is enabled)
 
-write_parsed_eventid = True
-write_parsed_indicators = True
+write_parsed_eventid = True        # Log each processed event id
+write_parsed_indicators = True     # Write parsed indicators to a JSON file for review
 
-days_to_expire_ignore_misp_last_seen = True
-days_to_expire = 50
+days_to_expire_ignore_misp_last_seen = True   # Ignore MISP last_seen when calculating expiration
+days_to_expire = 50          # Default indicator expiration in days
 # When True, discard indicators whose attribute timestamp is older than
 # days_to_expire days (the attribute is logged when discarded).
 consider_attribute_timestamp = False
-days_to_expire_start = "valid_from" #"valid_from" | "current_date"
-days_to_expire_mapping = {
+days_to_expire_start = "valid_from" # Count expiration from "valid_from" | "current_date"
+days_to_expire_mapping = {          # Override expiration (days) per indicator type
                     "IpAddress": 90,
                     "FileMd5": 99999,
                     "FileSha1": 99999,
@@ -48,18 +50,19 @@ days_to_expire_mapping = {
                     "Url": 365,
                     "DomainName": 300,
                 }
-days_to_expire_tlpclear = 7
+days_to_expire_tlpclear = 7         # Shorter expiration for TLP:CLEAR indicators
 
-defender_application = "MISP"
+defender_application = "MISP"       # Source tag shown in Defender
 defender_severity = "Medium"    # Informational, Low, Medium, and High.
 defender_recommended_actions = "Block" # string
-defender_generate_alert = True   
+defender_generate_alert = True         # Trigger alerts on indicator matches
 defender_action  = "Audit" # Warn, Block, Audit, Alert, AlertAndBlock, BlockAndRemediate, and Allowed.
 
-check_if_already_in_defender = True
+check_if_already_in_defender = True   # Fetch existing Defender indicators to skip duplicates
 
+# Events with any of these tags upload only their vetted attributes (see vetted_attribute_classifier)
 limit_vetted_attributes_from_specific_events = ["curation:source=\"MISP-TEST\""]
-vetted_attribute_classifier = ["course-of-action:active=\"deny\""]
+vetted_attribute_classifier = ["course-of-action:active=\"deny\""]   # Attribute tags that count as vetted
 
 # Attributes carrying any of these tags are never exported to Defender.
 exclude_always_from_defender = ["curation:curated=\"exclude_from_defender\""]
