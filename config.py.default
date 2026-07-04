@@ -60,3 +60,6 @@ check_if_already_in_defender = True
 
 limit_vetted_attributes_from_specific_events = ["curation:source=\"MISP-TEST\""]
 vetted_attribute_classifier = ["course-of-action:active=\"deny\""]
+
+# Attributes carrying any of these tags are never exported to Defender.
+exclude_always_from_defender = ["curation:curated=\"exclude_from_defender\""]

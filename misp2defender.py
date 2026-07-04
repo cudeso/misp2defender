@@ -128,6 +128,13 @@ def get_misp_events_upload_indicators(existing_indicators):
                                 logger.debug("Event {} {} requires vetted attributes only".format(misp_event.id, misp_event.info))
 
                     for element in misp_event.flatten_attributes:
+                        if hasattr(config, "exclude_always_from_defender") and config.exclude_always_from_defender:
+                            attribute_tags_lower = [tag["name"].lower() for tag in element.get("Tag", [])]
+                            exclude_tags_lower = [t.lower() for t in config.exclude_always_from_defender]
+                            if any(tag in exclude_tags_lower for tag in attribute_tags_lower):
+                                logger.debug("Skip indicator because tagged to never be exported to Defender {}".format(element["value"]))
+                                continue
+
                         if element["value"] in existing_indicators:
                             logger.debug("Skip indicator because already in Defender {}".format(element["value"]))
                             ignore_already_in_defender += 1
