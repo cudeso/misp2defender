@@ -128,6 +128,11 @@ def get_misp_events_upload_indicators(existing_indicators):
                                 logger.debug("Event {} {} requires vetted attributes only".format(misp_event.id, misp_event.info))
 
                     for element in misp_event.flatten_attributes:
+                        if "type_attribute" in config.misp_event_filters:
+                            if element.get("type", False) not in config.misp_event_filters["type_attribute"]:
+                                logger.debug("Skip indicator because not of accepted type {} {}".format(element["type"], element["value"]))
+                                continue
+
                         if hasattr(config, "exclude_always_from_defender") and config.exclude_always_from_defender:
                             attribute_tags_lower = [tag["name"].lower() for tag in element.get("Tag", [])]
                             exclude_tags_lower = [t.lower() for t in config.exclude_always_from_defender]
